@@ -7,6 +7,7 @@
 #include "util.h"
 #include "sync.h"
 #include "hash.h"
+#include "i2p.h"
 
 #ifndef WIN32
 #include <fcntl.h>
@@ -752,6 +753,9 @@ enum Network CNetAddr::GetNetwork() const
     if (IsTor())
         return NET_TOR;
 
+    if (IsI2P())
+	return NET_NATIVE_I2P;
+    
     return NET_IPV6;
 }
 
@@ -945,6 +949,11 @@ int CNetAddr::GetReachabilityFrom(const CNetAddr *paddrPartner) const
         case NET_IPV4:   return REACH_IPV4;
         case NET_IPV6:   return fTunnel ? REACH_IPV6_WEAK : REACH_IPV6_STRONG; // only prefer giving our IPv6 address if it's not tunnelled
         }
+    case NET_NATIVE_I2P:
+	switch(ourNet) {
+	default:         return REACH_UNREACHABLE;
+	case NET_NATIVE_I2P: return REACH_PRIVATE;
+	}
     case NET_TOR:
         switch(ourNet) {
         default:         return REACH_DEFAULT;
@@ -966,6 +975,7 @@ int CNetAddr::GetReachabilityFrom(const CNetAddr *paddrPartner) const
         case NET_TEREDO:  return REACH_TEREDO;
         case NET_IPV6:    return REACH_IPV6_WEAK;
         case NET_IPV4:    return REACH_IPV4;
+	case NET_NATIVE_I2P: return REACH_UNREACHABLE; // we can't get to i2p without i2p
         case NET_TOR:     return REACH_PRIVATE; // either from Tor, or don't care about our address
         }
     }
@@ -1062,17 +1072,17 @@ unsigned short CService::GetPort() const
 
 bool operator==(const CService& a, const CService& b)
 {
-    return (CNetAddr)a == (CNetAddr)b && a.port == b.port;
+    return (CNetAddr)a == (CNetAddr)b && a.port == b.port || (a.IsNativeI2P() && b.IsNativeI2P()));
 }
 
 bool operator!=(const CService& a, const CService& b)
 {
-    return (CNetAddr)a != (CNetAddr)b || a.port != b.port;
+    return (CNetAddr)a != (CNetAddr)b || a.port != b.port || (a.IsNativeI2P() && b.IsNativeI2P()));
 }
 
 bool operator<(const CService& a, const CService& b)
 {
-    return (CNetAddr)a < (CNetAddr)b || ((CNetAddr)a == (CNetAddr)b && a.port < b.port);
+    return (CNetAddr)a < (CNetAddr)b || ((CNetAddr)a == (CNetAddr)b && a.port < b.port) && (a.IsNativeI2P() && b.IsNativeI2P());
 }
 
 bool CService::GetSockAddr(struct sockaddr* paddr, socklen_t *addrlen) const
@@ -1109,10 +1119,15 @@ bool CService::GetSockAddr(struct sockaddr* paddr, socklen_t *addrlen) const
 std::vector<unsigned char> CService::GetKey() const
 {
      std::vector<unsigned char> vKey;
-     vKey.resize(18);
-     memcpy(&vKey[0], ip, 16);
-     vKey[16] = port / 0x100;
-     vKey[17] = port & 0x0FF;
+     if (IsNativeI2P()) {
+	 vkey.resize(NATIVE_I2P_DESTINATION_SIZE);
+	 memcpy(&vKey[0], i2pDest, NATIVE_I2P_DESTINATION_SIZE);
+     } else {
+	 vKey.resize(18);
+	 memcpy(&vKey[0], ip, 16);
+	 vKey[16] = port / 0x100;
+	 vKey[17] = port & 0x0FF;
+     }
      return vKey;
 }
 

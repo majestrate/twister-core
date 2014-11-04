@@ -43,10 +43,13 @@ twister::twister()
 //#define DEBUG_MAINTAIN_DHT_NODES 1
 //#define DEBUG_NEIGHBOR_TORRENT 1
 
+#include "i2p-utils.h"
+
 using namespace libtorrent;
 static boost::shared_ptr<session> m_ses;
 static bool m_shuttingDownSession = false;
 static bool m_usingProxy;
+static bool m_useI2P;
 static int num_outstanding_resume_data;
 
 static CCriticalSection cs_dhtgetMap;
@@ -263,7 +266,8 @@ void ThreadWaitExtIP()
     SimpleThreadCounter threadCounter(&cs_twister, &m_threadsToJoin, "wait-extip");
 
     std::string ipStr;
-
+    std::string i2pSocks;
+    
     // wait up to 10 seconds for bitcoin to get the external IP
     for( int i = 0; i < 20; i++ ) {
         const CNetAddr paddrPeer("8.8.8.8");
@@ -300,6 +304,7 @@ void ThreadWaitExtIP()
             , !m_usingProxy ? std::make_pair(listen_port, listen_port) : std::make_pair(0, 0) ));
     boost::shared_ptr<session> ses(m_ses);
 
+    
     if( m_usingProxy ) {
         proxy_settings proxy;
         proxy.hostname = proxyInfoOut.first.ToStringIP();
@@ -309,6 +314,20 @@ void ThreadWaitExtIP()
         ses->set_proxy(proxy);
     }
 
+
+    // i2p socks proxy settings
+    proxyType i2pProxyInfoOut;
+    
+    m_useI2P = GetProxy(NET_NATIVE_I2P, i2pProxyInfoOut);  
+    if( m_useI2P ) {
+	proxy_settings proxy;
+	proxy.hostname = i2pProxyInfoOut.first.ToStringIP();
+	proxy.port = i2pProxyInfoOut.first.GetPort();
+	proxy.type = proxy_settings::socks5;
+	ses->set_i2p_proxy(proxy);
+    }
+    
+    
     // session will be paused until we have an up-to-date blockchain
     ses->pause();
 

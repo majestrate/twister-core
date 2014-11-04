@@ -17,13 +17,17 @@ extern int nConnectTimeout;
 #undef SetPort
 #endif
 
+#define NATIVE_I2P_ADDR_SIZE         60
+#define NATIVE_I2P_NET_STRING           "i2p"
+
 enum Network
 {
     NET_UNROUTABLE,
     NET_IPV4,
     NET_IPV6,
     NET_TOR,
-
+    NET_NATIVE_I2P,
+    
     NET_MAX,
 };
 
@@ -35,7 +39,7 @@ class CNetAddr
 {
     protected:
         unsigned char ip[16]; // in network byte order
-
+	unsigned char i2pDest[NATIVE_I2P_ADDR_SIZE]; // use b32 addresses for i2p
     public:
         CNetAddr();
         CNetAddr(const struct in_addr& ipv4Addr);
@@ -70,6 +74,8 @@ class CNetAddr
         std::vector<unsigned char> GetGroup() const;
         int GetReachabilityFrom(const CNetAddr *paddrPartner = NULL) const;
         void print() const;
+	bool IsNativeI2P() const;
+	std::string GetI2PDestination();
 
 #ifdef USE_IPV6
         CNetAddr(const struct in6_addr& pipv6Addr);
@@ -83,6 +89,9 @@ class CNetAddr
         IMPLEMENT_SERIALIZE
             (
              READWRITE(FLATDATA(ip));
+	     if ( ! (nType & SER_IPADDRONLY)) {
+		 READWRITE(FLATDATA(i2pDest));
+	     }				       
             )
 };
 
@@ -124,6 +133,9 @@ class CService : public CNetAddr
             (
              CService* pthis = const_cast<CService*>(this);
              READWRITE(FLATDATA(ip));
+	     if ( ! (nType & SER_IPADDRONLY)) {
+		 READWRITE(FLATDATA(i2pDest));
+	     }		       
              unsigned short portN = htons(port);
              READWRITE(portN);
              if (fRead)

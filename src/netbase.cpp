@@ -485,6 +485,7 @@ bool ConnectSocket(const CService &addrDest, SOCKET& hSocketRet, int nTimeout)
 
     if ( addrDest.IsNativeI2P()) {
 	std::string dest = addrDest.GetI2PDestination();
+	printf("connecting to i2p dest: %s\n", dest.c_str());
 	hSocketRet = I2PSession::Instance().connect(dest, false);
 	return hSocketRet != INVALID_SOCKET;
     }

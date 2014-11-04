@@ -319,7 +319,7 @@ void ThreadWaitExtIP()
     if( m_useI2P ) {
 	proxy_settings proxy;
 	proxy.hostname = GetArg("i2psamhost", "127.0.0.1");
-	proxy.port = GetArg("i2psamsport", 12221);
+	proxy.port = GetArg("i2psamport", 7656);
 	printf("Use i2p sam interface at %s:%d\n", proxy.hostname.c_str(), proxy.port); 
 	ses->set_i2p_proxy(proxy);
     }

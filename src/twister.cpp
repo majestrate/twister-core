@@ -316,14 +316,14 @@ void ThreadWaitExtIP()
 
 
     // i2p socks proxy settings
-    proxyType i2pProxyInfoOut;
     
-    m_useI2P = GetProxy(NET_NATIVE_I2P, i2pProxyInfoOut);  
+    m_useI2P = GetBoolArg("-i2p", false);
     if( m_useI2P ) {
 	proxy_settings proxy;
-	proxy.hostname = i2pProxyInfoOut.first.ToStringIP();
-	proxy.port = i2pProxyInfoOut.first.GetPort();
+	proxy.hostname = GetArg("i2psockshost", "127.0.0.1");
+	proxy.port = GetArg("i2psocksport", 12221);
 	proxy.type = proxy_settings::socks5;
+	printf("Use i2p socks5 proxy at %s:%d\n", proxy.hostname.c_str(), proxy.port); 
 	ses->set_i2p_proxy(proxy);
     }
     

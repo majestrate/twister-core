@@ -39,6 +39,7 @@ enum Network ParseNetwork(std::string net) {
     if (net == "ipv4") return NET_IPV4;
     if (net == "ipv6") return NET_IPV6;
     if (net == "tor")  return NET_TOR;
+    if (net == "i2p")  return NET_NATIVE_I2P;
     return NET_UNROUTABLE;
 }
 
@@ -482,6 +483,12 @@ bool ConnectSocket(const CService &addrDest, SOCKET& hSocketRet, int nTimeout)
 {
     proxyType proxy;
 
+    if ( addrDest.IsNativeI2P()) {
+	std::string dest = addrDest.GetI2PDestination();
+	hSocketRet = I2PSession::Instance().connect(dest, false);
+	return hSocketRet != INVALID_SOCKET;
+    }
+    
     // no proxy needed
     if (!GetProxy(addrDest.GetNetwork(), proxy))
         return ConnectSocketDirectly(addrDest, hSocketRet, nTimeout);
@@ -548,17 +555,25 @@ bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest
 void CNetAddr::Init()
 {
     memset(ip, 0, sizeof(ip));
+    memset(i2pDest, 0 , NATIVE_I2P_ADDR_SIZE);
 }
 
 void CNetAddr::SetIP(const CNetAddr& ipIn)
 {
     memcpy(ip, ipIn.ip, sizeof(ip));
+    memcpy(i2pDest, ipIn.i2pDest, NATIVE_I2P_ADDR_SIZE);
 }
 
 static const unsigned char pchOnionCat[] = {0xFD,0x87,0xD8,0x7E,0xEB,0x43};
 
 bool CNetAddr::SetSpecial(const std::string &strName)
 {
+    const bool isBase32Addr = (strName.size() == NATIVE_I2P_ADDR_SIZE) && (strName.substr(strName.size() - 8, 8) == ".b32.i2p");
+    if ( isBase32Addr ) {
+	memcpy(i2pDest, strName.c_str(), NATIVE_I2P_ADDR_SIZE);
+	return true;
+    }
+    
     if (strName.size()>6 && strName.substr(strName.size() - 6, 6) == ".onion") {
         std::vector<unsigned char> vchAddr = DecodeBase32(strName.substr(0, strName.size() - 6).c_str());
         if (vchAddr.size() != 16-sizeof(pchOnionCat))
@@ -574,18 +589,21 @@ bool CNetAddr::SetSpecial(const std::string &strName)
 CNetAddr::CNetAddr()
 {
     Init();
+    memset(i2pDest, 0 , NATIVE_I2P_ADDR_SIZE);
 }
 
 CNetAddr::CNetAddr(const struct in_addr& ipv4Addr)
 {
     memcpy(ip,    pchIPv4, 12);
     memcpy(ip+12, &ipv4Addr, 4);
+    memset(i2pDest, 0 , NATIVE_I2P_ADDR_SIZE);
 }
 
 #ifdef USE_IPV6
 CNetAddr::CNetAddr(const struct in6_addr& ipv6Addr)
 {
     memcpy(ip, &ipv6Addr, 16);
+    memset(i2pDest, 0 , NATIVE_I2P_ADDR_SIZE);
 }
 #endif
 
@@ -617,7 +635,7 @@ bool CNetAddr::IsIPv4() const
 
 bool CNetAddr::IsIPv6() const
 {
-    return (!IsIPv4() && !IsTor());
+    return (!IsIPv4() && !IsTor() && !IsNativeI2P());
 }
 
 bool CNetAddr::IsRFC1918() const
@@ -683,6 +701,10 @@ bool CNetAddr::IsTor() const
 
 bool CNetAddr::IsLocal() const
 {
+    // i2p is not local
+    if ( IsNativeI2P())
+	return false;
+    
     // IPv4 loopback
    if (IsIPv4() && (GetByte(3) == 127 || GetByte(3) == 0))
        return true;
@@ -703,6 +725,10 @@ bool CNetAddr::IsMulticast() const
 
 bool CNetAddr::IsValid() const
 {
+    if (IsNativeI2P()) {
+	return true;
+    }
+    
     // Cleanup 3-byte shifted addresses caused by garbage in size field
     // of addr messages from versions before 0.2.9 checksum.
     // Two consecutive addr messages look like this:
@@ -733,7 +759,7 @@ bool CNetAddr::IsValid() const
         if (memcmp(ip+12, &ipNone, 4) == 0)
             return false;
     }
-
+    
     return true;
 }
 
@@ -753,7 +779,7 @@ enum Network CNetAddr::GetNetwork() const
     if (IsTor())
         return NET_TOR;
 
-    if (IsI2P())
+    if (IsNativeI2P())
 	return NET_NATIVE_I2P;
     
     return NET_IPV6;
@@ -816,6 +842,8 @@ bool CNetAddr::GetInAddr(struct in_addr* pipv4Addr) const
 #ifdef USE_IPV6
 bool CNetAddr::GetIn6Addr(struct in6_addr* pipv6Addr) const
 {
+    if (IsNativeI2P())
+	return false;
     memcpy(pipv6Addr, ip, 16);
     return true;
 }
@@ -892,7 +920,7 @@ std::vector<unsigned char> CNetAddr::GetGroup() const
 
 uint64 CNetAddr::GetHash() const
 {
-    uint256 hash = Hash(&ip[0], &ip[16]);
+    uint256 hash = IsNativeI2P() ? Hash(i2pDest, i2pDest + NATIVE_I2P_ADDR_SIZE) : Hash(&ip[0], &ip[16]);
     uint64 nRet;
     memcpy(&nRet, &hash, sizeof(nRet));
     return nRet;
@@ -902,6 +930,12 @@ void CNetAddr::print() const
 {
     printf("CNetAddr(%s)\n", ToString().c_str());
 }
+
+std::string CNetAddr::GetI2PDestination() const
+{
+    return i2pDest;
+}
+
 
 // private extensions to enum Network, only returned by GetExtNetwork,
 // and only used in GetReachabilityFrom
@@ -979,6 +1013,12 @@ int CNetAddr::GetReachabilityFrom(const CNetAddr *paddrPartner) const
         case NET_TOR:     return REACH_PRIVATE; // either from Tor, or don't care about our address
         }
     }
+}
+
+bool CNetAddr::IsNativeI2P() const
+{
+    static const unsigned char i2ptld[] = {'.','b','3','2','.','i','2','p'};
+    return (memcmp(i2pDest + NATIVE_I2P_ADDR_SIZE - sizeof(i2ptld), i2ptld, sizeof(i2ptld)) == 0);
 }
 
 void CService::Init()
@@ -1072,12 +1112,12 @@ unsigned short CService::GetPort() const
 
 bool operator==(const CService& a, const CService& b)
 {
-    return (CNetAddr)a == (CNetAddr)b && a.port == b.port || (a.IsNativeI2P() && b.IsNativeI2P()));
+    return (CNetAddr)a == (CNetAddr)b && a.port == b.port || (a.IsNativeI2P() && b.IsNativeI2P());
 }
 
 bool operator!=(const CService& a, const CService& b)
 {
-    return (CNetAddr)a != (CNetAddr)b || a.port != b.port || (a.IsNativeI2P() && b.IsNativeI2P()));
+    return (CNetAddr)a != (CNetAddr)b || a.port != b.port || (a.IsNativeI2P() && b.IsNativeI2P());
 }
 
 bool operator<(const CService& a, const CService& b)
@@ -1120,8 +1160,8 @@ std::vector<unsigned char> CService::GetKey() const
 {
      std::vector<unsigned char> vKey;
      if (IsNativeI2P()) {
-	 vkey.resize(NATIVE_I2P_DESTINATION_SIZE);
-	 memcpy(&vKey[0], i2pDest, NATIVE_I2P_DESTINATION_SIZE);
+	 vKey.resize(NATIVE_I2P_ADDR_SIZE);
+	 memcpy(&vKey[0], i2pDest, NATIVE_I2P_ADDR_SIZE);
      } else {
 	 vKey.resize(18);
 	 memcpy(&vKey[0], ip, 16);

@@ -141,6 +141,8 @@ OBJS= \
     obj/twister.o \
     obj/twister_rss.o \
     obj/twister_utils.o
+    obj/i2p.o \
+    obj/i2psam.o
 
 ifdef USE_SSE2
 DEFS += -DUSE_SSE2

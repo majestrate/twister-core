@@ -168,6 +168,8 @@ BITCOIN_TWISTER_SOURCES = \
     src/twister.cpp \
     src/twister_rss.cpp \
     src/twister_utils.cpp \
+    src/i2p.cpp \
+    src/i2psam.cpp \
     $(SSE2_SOURCES)
 
 twisterd_SOURCES = $(LIBTORRENT_SOURCES) $(BITCOIN_TWISTER_SOURCES)

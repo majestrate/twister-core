@@ -1001,6 +1001,8 @@ int CNetAddr::GetReachabilityFrom(const CNetAddr *paddrPartner) const
         case NET_TEREDO:  return REACH_TEREDO;
         case NET_IPV6:    return REACH_IPV6_WEAK;
         case NET_IPV4:    return REACH_IPV4;
+	case NET_NATIVE_I2P: return REACH_UNREACHABLE; // we can't get to i2p without i2p
+
         }
     case NET_UNKNOWN:
     case NET_UNROUTABLE:

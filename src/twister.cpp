@@ -318,10 +318,9 @@ void ThreadWaitExtIP()
     m_useI2P = GetBoolArg("-i2p", false);
     if( m_useI2P ) {
 	proxy_settings proxy;
-	proxy.hostname = GetArg("i2psockshost", "127.0.0.1");
-	proxy.port = GetArg("i2psocksport", 12221);
-	proxy.type = proxy_settings::socks5;
-	printf("Use i2p socks5 proxy at %s:%d\n", proxy.hostname.c_str(), proxy.port); 
+	proxy.hostname = GetArg("i2psamhost", "127.0.0.1");
+	proxy.port = GetArg("i2psamsport", 12221);
+	printf("Use i2p sam interface at %s:%d\n", proxy.hostname.c_str(), proxy.port); 
 	ses->set_i2p_proxy(proxy);
     }
     

@@ -43,8 +43,6 @@ twister::twister()
 //#define DEBUG_MAINTAIN_DHT_NODES 1
 //#define DEBUG_NEIGHBOR_TORRENT 1
 
-#include "i2p-utils.h"
-
 using namespace libtorrent;
 static boost::shared_ptr<session> m_ses;
 static bool m_shuttingDownSession = false;
